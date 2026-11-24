@@ -1,0 +1,2584 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>ABISMO — Labirinto 3D Vertical Infinito</title>
+<style>
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #060913;
+    font-family: 'Segoe UI', system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    color: #e8eefc;
+  }
+
+  #glCanvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    cursor: grab;
+  }
+
+  #glCanvas:active {
+    cursor: grabbing;
+  }
+
+  /* HUD Minimalista */
+  .hud {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    padding: 18px 22px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: opacity 0.3s ease;
+  }
+
+  .hud.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .hud-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .panel {
+    background: rgba(10, 16, 30, 0.62);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(140, 180, 255, 0.18);
+    border-radius: 12px;
+    padding: 12px 16px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  }
+
+  .floor-badge {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .floor-label {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #8ea4cc;
+    font-weight: 600;
+  }
+
+  .floor-num {
+    font-size: 32px;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    background: linear-gradient(135deg, #ffffff 10%, #7dd3fc 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .stats-row {
+    margin-top: 8px;
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: #a8b9d8;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stats-row strong {
+    color: #f1f5ff;
+    font-weight: 600;
+  }
+
+  .progress-wrap {
+    margin-top: 10px;
+    width: 196px;
+  }
+
+  .progress-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #7d93ba;
+    margin-bottom: 4px;
+  }
+
+  .progress-track {
+    width: 100%;
+    height: 5px;
+    background: rgba(255, 255, 255, 0.09);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, #38bdf8, #a78bfa);
+    transition: width 0.25s ease;
+  }
+
+  .hud-actions {
+    display: flex;
+    gap: 8px;
+    pointer-events: auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .icon-btn {
+    background: rgba(10, 16, 30, 0.62);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(140, 180, 255, 0.2);
+    color: #d6e4ff;
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, transform 0.1s;
+  }
+
+  .icon-btn:hover {
+    background: rgba(30, 46, 78, 0.78);
+    border-color: rgba(140, 180, 255, 0.45);
+  }
+
+  .icon-btn:active {
+    transform: scale(0.95);
+  }
+
+  /* Aviso sutil de queda / novo andar */
+  .floor-toast {
+    position: fixed;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-10px);
+    background: rgba(12, 20, 38, 0.78);
+    border: 1px solid rgba(125, 211, 252, 0.38);
+    color: #e0f2fe;
+    padding: 6px 16px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    z-index: 15;
+  }
+
+  .floor-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* Dicas inferiores */
+  .hud-bottom {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+  }
+
+  .controls-hint {
+    background: rgba(10, 16, 30, 0.52);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(140, 180, 255, 0.14);
+    border-radius: 999px;
+    padding: 7px 16px;
+    font-size: 11.5px;
+    color: #9cb0d4;
+    letter-spacing: 0.02em;
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .controls-hint span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  kbd {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-family: inherit;
+    font-size: 10.5px;
+    color: #eaf2ff;
+  }
+
+  /* Controles Touch (Mobile) */
+  .touch-controls {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    display: none;
+    z-index: 10;
+  }
+
+  .touch-controls.active {
+    display: block;
+  }
+
+  .joystick-zone {
+    position: fixed;
+    left: 24px;
+    bottom: 28px;
+    width: 126px;
+    height: 126px;
+    border-radius: 50%;
+    background: rgba(12, 20, 38, 0.45);
+    border: 1.5px solid rgba(140, 180, 255, 0.25);
+    backdrop-filter: blur(6px);
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .joystick-knob {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #bae6fd, #38bdf8 65%, #0284c7);
+    box-shadow: 0 4px 16px rgba(56, 189, 248, 0.45);
+    transform: translate(0px, 0px);
+    transition: transform 0.04s linear;
+  }
+
+  .brake-btn {
+    position: fixed;
+    right: 26px;
+    bottom: 44px;
+    width: 74px;
+    height: 74px;
+    border-radius: 50%;
+    background: rgba(12, 20, 38, 0.55);
+    border: 1.5px solid rgba(248, 113, 113, 0.42);
+    color: #fecaca;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    backdrop-filter: blur(6px);
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .brake-btn.pressed {
+    background: rgba(239, 68, 68, 0.35);
+    border-color: rgba(248, 113, 113, 0.85);
+    transform: scale(0.94);
+  }
+
+  /* ============================================================================
+     TELAS DE INÍCIO E CONFIGURAÇÕES (OVERLAYS)
+     ============================================================================ */
+  .overlay-screen {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(circle at 50% 35%, rgba(12, 22, 44, 0.72), rgba(5, 8, 18, 0.90));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 50;
+    transition: opacity 0.3s ease;
+  }
+
+  .overlay-screen.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .modal-card {
+    width: 100%;
+    max-width: 440px;
+    max-height: 92vh;
+    overflow-y: auto;
+    background: rgba(13, 21, 39, 0.88);
+    border: 1px solid rgba(140, 180, 255, 0.24);
+    border-radius: 20px;
+    padding: 26px 24px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+    text-align: center;
+  }
+
+  .game-subtitle {
+    font-size: 11px;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    color: #38bdf8;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+
+  .game-title {
+    font-size: 42px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    background: linear-gradient(135deg, #ffffff 15%, #7dd3fc 65%, #a78bfa 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 12px;
+  }
+
+  .game-desc {
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: #a6b8d9;
+    margin-bottom: 24px;
+  }
+
+  .btn-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+  }
+
+  .primary-btn {
+    width: 100%;
+    padding: 14px 20px;
+    border-radius: 12px;
+    border: none;
+    background: linear-gradient(135deg, #0284c7, #38bdf8);
+    color: #04101f;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(56, 189, 248, 0.35);
+    transition: transform 0.15s, filter 0.15s;
+  }
+
+  .primary-btn:hover {
+    filter: brightness(1.08);
+  }
+
+  .primary-btn:active {
+    transform: scale(0.97);
+  }
+
+  .secondary-btn {
+    width: 100%;
+    padding: 12px 18px;
+    border-radius: 12px;
+    border: 1px solid rgba(140, 180, 255, 0.25);
+    background: rgba(255, 255, 255, 0.06);
+    color: #e2ecff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+  }
+
+  .secondary-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(140, 180, 255, 0.45);
+  }
+
+  /* Itens da Tela de Configurações */
+  .settings-header {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    margin-bottom: 14px;
+    color: #f1f5ff;
+  }
+
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 11px 0;
+    border-bottom: 1px solid rgba(140, 180, 255, 0.12);
+    text-align: left;
+  }
+
+  .setting-row:last-of-type {
+    border-bottom: none;
+    margin-bottom: 16px;
+  }
+
+  .setting-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .setting-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #e8eefc;
+  }
+
+  .setting-sub {
+    font-size: 11px;
+    color: #8499bf;
+  }
+
+  .setting-status {
+    font-size: 10.5px;
+    color: #38bdf8;
+    margin-top: 2px;
+    line-height: 1.3;
+  }
+
+  .setting-status.warn {
+    color: #fbbf24;
+  }
+
+  .volume-control {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    width: 110px;
+    height: 6px;
+    border-radius: 99px;
+    background: rgba(255, 255, 255, 0.16);
+    outline: none;
+    cursor: pointer;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #38bdf8;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
+    cursor: pointer;
+  }
+
+  .vol-val {
+    font-size: 12px;
+    font-weight: 700;
+    width: 38px;
+    text-align: right;
+    color: #7dd3fc;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .toggle-pill {
+    min-width: 78px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(140, 180, 255, 0.25);
+    background: rgba(255, 255, 255, 0.08);
+    color: #9cb0d4;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .toggle-pill.active {
+    background: rgba(56, 189, 248, 0.22);
+    border-color: #38bdf8;
+    color: #e0f2fe;
+  }
+
+  @media (max-width: 768px) {
+    .hud { padding: 12px 14px; }
+    .floor-num { font-size: 26px; }
+    .progress-wrap { width: 150px; }
+    .controls-hint { display: none; }
+    .modal-card { padding: 22px 18px; }
+    .game-title { font-size: 34px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="glCanvas"></canvas>
+
+<!-- HUD DO JOGO -->
+<div class="hud hidden" id="hudLayer">
+  <div class="hud-top">
+    <div class="panel">
+      <div class="floor-badge">
+        <span class="floor-label">Andar</span>
+        <span class="floor-num" id="uiFloor">01</span>
+      </div>
+      <div class="stats-row">
+        <span>Percorridos: <strong id="uiCleared">0</strong></span>
+        <span>Grade: <strong id="uiGrid">5×5</strong></span>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-meta">
+          <span>Proximidade da saída</span>
+          <span id="uiProx">0%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="uiProxBar"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hud-actions">
+      <button class="icon-btn" id="btnCam" title="Visão Top-Down (R)">Top-Down</button>
+      <button class="icon-btn" id="btnCalibrate" title="Calibrar Acelerômetro" style="display:none;">Calibrar</button>
+      <button class="icon-btn" id="btnFullscreenHud" title="Tela Cheia">Tela Cheia</button>
+      <button class="icon-btn" id="btnSettingsHud" title="Configurações (Esc)">Configurações</button>
+    </div>
+  </div>
+
+  <div class="hud-bottom">
+    <div class="controls-hint">
+      <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> ou <kbd>Setas</kbd> Mover</span>
+      <span><kbd>Espaço</kbd> Frear</span>
+      <span><kbd>Mouse</kbd> / <kbd>Q</kbd><kbd>E</kbd> Câmera Livre</span>
+      <span><kbd>R</kbd> Top-Down</span>
+      <span><kbd>Esc</kbd> Configurações</span>
+    </div>
+  </div>
+</div>
+
+<div class="floor-toast" id="floorToast">ANDAR 02</div>
+
+<div class="touch-controls" id="touchControls">
+  <div class="joystick-zone" id="joystickZone">
+    <div class="joystick-knob" id="joystickKnob"></div>
+  </div>
+  <div class="brake-btn" id="brakeBtn">FREIO</div>
+</div>
+
+<!-- TELA DE INÍCIO -->
+<div class="overlay-screen" id="startScreen">
+  <div class="modal-card">
+    <div class="game-subtitle">Labirinto 3D Vertical Infinito</div>
+    <h1 class="game-title">ABISMO</h1>
+    <p class="game-desc">
+      Conduza a esfera pelos labirintos suspensos, encontre as aberturas luminosas e desça infinitamente pelas profundezas da estrutura.
+    </p>
+    <div class="btn-stack">
+      <button class="primary-btn" id="btnStartGame">Jogar</button>
+      <button class="secondary-btn" id="btnOpenSettingsStart">Configurações</button>
+    </div>
+  </div>
+</div>
+
+<!-- TELA DE CONFIGURAÇÕES -->
+<div class="overlay-screen hidden" id="settingsScreen">
+  <div class="modal-card">
+    <h2 class="settings-header">Configurações</h2>
+
+    <div class="setting-row">
+      <div class="setting-info">
+        <span class="setting-title">Volume Geral</span>
+        <span class="setting-sub">Intensidade dos efeitos sonoros</span>
+      </div>
+      <div class="volume-control">
+        <input type="range" id="optVolume" min="0" max="100" value="80" />
+        <span class="vol-val" id="optVolumeVal">80%</span>
+      </div>
+    </div>
+
+    <div class="setting-row">
+      <div class="setting-info">
+        <span class="setting-title">Som</span>
+        <span class="setting-sub">Efeitos de colisão, queda e aterrissagem</span>
+      </div>
+      <button class="toggle-pill active" id="optSound">Ligado</button>
+    </div>
+
+    <div class="setting-row">
+      <div class="setting-info">
+        <span class="setting-title">Vibração</span>
+        <span class="setting-sub">Resposta tátil em dispositivos móveis</span>
+      </div>
+      <button class="toggle-pill active" id="optVibrate">Ligada</button>
+    </div>
+
+    <div class="setting-row">
+      <div class="setting-info">
+        <span class="setting-title">Inclinação do Tabuleiro</span>
+        <span class="setting-sub">Playfield inclina na direção do movimento</span>
+      </div>
+      <button class="toggle-pill active" id="optTilt">Ligada</button>
+    </div>
+
+    <div class="setting-row">
+      <div class="setting-info">
+        <span class="setting-title">Acelerômetro (Mobile)</span>
+        <span class="setting-sub">Inclinar o aparelho para mover a bola</span>
+        <span class="setting-status" id="accelStatusText">Inicializando sensores...</span>
+      </div>
+      <button class="toggle-pill active" id="optAccel">Ligado</button>
+    </div>
+
+    <div class="setting-row">
+      <div class="setting-info">
+        <span class="setting-title">Modo Tela Cheia</span>
+        <span class="setting-sub">Expandir jogo para toda a tela</span>
+      </div>
+      <button class="toggle-pill" id="optFullscreen">Ativar</button>
+    </div>
+
+    <div class="btn-stack">
+      <button class="primary-btn" id="btnCloseSettings">Voltar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ============================================================================
+     1. CONFIGURAÇÕES GERAIS E CONSTANTES
+     ============================================================================ */
+  const CELL_SIZE = 2.6;
+  const WALL_H = 1.12;
+  const WALL_T = 0.26;
+  const FLOOR_THICKNESS = 0.42;
+  const FLOOR_GAP = 13.5;
+  const BALL_R = 0.50;
+  const HOLE_HALF = 0.78;
+  const VISIBLE_BELOW = 5;
+  const VISIBLE_ABOVE = 1;
+
+  // Física
+  const GRAVITY = -34.0;
+  const MOVE_ACCEL = 26.0;
+  const AIR_ACCEL = 6.0;
+  const GROUND_DRAG = 3.2;
+  const BRAKE_DRAG = 11.5;
+  const MAX_SPEED = 10.5;
+  const WALL_BOUNCE = 0.26;
+  const FLOOR_BOUNCE = 0.34;
+  const FIXED_DT = 1 / 120;
+
+  // Inclinação dinâmica do playfield (radianos)
+  const MAX_PLAYFIELD_TILT = 0.072;
+
+  // Câmera Top-Down padrão
+  const DEFAULT_YAW = 0.0;
+  const DEFAULT_PITCH = 1.48;
+  const DEFAULT_DIST = 21.5;
+
+  // Preferências do usuário
+  const Settings = {
+    volume: 0.8,
+    sound: true,
+    vibration: true,
+    boardTilt: true,
+    accelerometer: true
+  };
+
+  let gameState = 'START';
+  let previousState = 'START';
+
+  const PALETTES = [
+    { wall: [0.16, 0.56, 0.82], floor: [0.09, 0.14, 0.24], accent: [0.22, 0.85, 0.98], wire: [0.25, 0.76, 1.0] },
+    { wall: [0.46, 0.34, 0.86], floor: [0.12, 0.11, 0.24], accent: [0.74, 0.52, 1.0],  wire: [0.64, 0.48, 1.0] },
+    { wall: [0.12, 0.68, 0.58], floor: [0.08, 0.17, 0.19], accent: [0.24, 0.96, 0.78], wire: [0.22, 0.88, 0.74] },
+    { wall: [0.85, 0.42, 0.28], floor: [0.19, 0.12, 0.14], accent: [1.0,  0.66, 0.34], wire: [1.0,  0.56, 0.36] },
+    { wall: [0.76, 0.26, 0.58], floor: [0.18, 0.10, 0.19], accent: [1.0,  0.46, 0.82], wire: [0.96, 0.42, 0.76] },
+    { wall: [0.24, 0.62, 0.42], floor: [0.09, 0.16, 0.15], accent: [0.48, 0.96, 0.62], wire: [0.38, 0.88, 0.58] }
+  ];
+
+  /* ============================================================================
+     2. ÁUDIO E VIBRAÇÃO PROCEDURAL (WEB AUDIO API + VIBRATION API)
+     ============================================================================ */
+  function triggerVibration(pattern) {
+    if (!Settings.vibration) return;
+    if (navigator.vibrate) {
+      try { navigator.vibrate(pattern); } catch (_) {}
+    }
+  }
+
+  const Sound = {
+    ctx: null,
+    init() {
+      if (!this.ctx && (window.AudioContext || window.webkitAudioContext)) {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (this.ctx && this.ctx.state === 'suspended') {
+        this.ctx.resume();
+      }
+    },
+    playBump(intensity) {
+      if (!Settings.sound || Settings.volume <= 0 || !this.ctx || intensity < 0.08) return;
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      const vol = Math.min(0.22, intensity * 0.18) * Settings.volume;
+      osc.frequency.setValueAtTime(140 + intensity * 90, now);
+      osc.frequency.exponentialRampToValueAtTime(52, now + 0.09);
+      gain.gain.setValueAtTime(Math.max(0.0001, vol), now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.095);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.1);
+
+      if (intensity > 0.45) triggerVibration(14);
+    },
+    playLand(impactSpeed) {
+      if (impactSpeed > 5) {
+        triggerVibration(impactSpeed > 12 ? [35, 25, 45] : 25);
+      }
+      if (!Settings.sound || Settings.volume <= 0 || !this.ctx) return;
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      const vol = Math.min(0.32, Math.max(0.08, impactSpeed * 0.016)) * Settings.volume;
+      osc.frequency.setValueAtTime(125, now);
+      osc.frequency.exponentialRampToValueAtTime(38, now + 0.22);
+      gain.gain.setValueAtTime(Math.max(0.0001, vol), now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.25);
+
+      if (impactSpeed > 7) {
+        const osc2 = this.ctx.createOscillator();
+        const gain2 = this.ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(440, now);
+        osc2.frequency.exponentialRampToValueAtTime(660, now + 0.18);
+        gain2.gain.setValueAtTime(Math.max(0.0001, 0.07 * Settings.volume), now);
+        gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
+        osc2.connect(gain2);
+        gain2.connect(this.ctx.destination);
+        osc2.start(now);
+        osc2.stop(now + 0.3);
+      }
+    },
+    playDrop() {
+      triggerVibration(20);
+      if (!Settings.sound || Settings.volume <= 0 || !this.ctx) return;
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(360, now);
+      osc.frequency.exponentialRampToValueAtTime(150, now + 0.28);
+      gain.gain.setValueAtTime(Math.max(0.0001, 0.11 * Settings.volume), now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.32);
+    }
+  };
+
+  /* ============================================================================
+     3. MATEMÁTICA 3D (MATRIZES E QUATÉRNIOS)
+     ============================================================================ */
+  const Mat4 = {
+    identity() {
+      const m = new Float32Array(16);
+      m[0] = m[5] = m[10] = m[15] = 1;
+      return m;
+    },
+    perspective(fovy, aspect, near, far) {
+      const f = 1.0 / Math.tan(fovy / 2);
+      const nf = 1 / (near - far);
+      const out = new Float32Array(16);
+      out[0] = f / aspect;
+      out[5] = f;
+      out[10] = (far + near) * nf;
+      out[11] = -1;
+      out[14] = (2 * far * near) * nf;
+      return out;
+    },
+    lookAt(eye, center, up) {
+      let zx = eye[0] - center[0], zy = eye[1] - center[1], zz = eye[2] - center[2];
+      let len = Math.hypot(zx, zy, zz) || 1;
+      zx /= len; zy /= len; zz /= len;
+
+      let xx = up[1] * zz - up[2] * zy;
+      let xy = up[2] * zx - up[0] * zz;
+      let xz = up[0] * zy - up[1] * zx;
+      len = Math.hypot(xx, xy, xz) || 1;
+      xx /= len; xy /= len; xz /= len;
+
+      const yx = zy * xz - zz * xy;
+      const yy = zz * xx - zx * xz;
+      const yz = zx * xy - zy * xx;
+
+      const out = new Float32Array(16);
+      out[0] = xx; out[1] = yx; out[2] = zx; out[3] = 0;
+      out[4] = xy; out[5] = yy; out[6] = zy; out[7] = 0;
+      out[8] = xz; out[9] = yz; out[10] = zz; out[11] = 0;
+      out[12] = -(xx * eye[0] + xy * eye[1] + xz * eye[2]);
+      out[13] = -(yx * eye[0] + yy * eye[1] + yz * eye[2]);
+      out[14] = -(zx * eye[0] + zy * eye[1] + zz * eye[2]);
+      out[15] = 1;
+      return out;
+    },
+    fromTranslation(x, y, z) {
+      const m = Mat4.identity();
+      m[12] = x; m[13] = y; m[14] = z;
+      return m;
+    },
+    fromTiltedFloor(flY, px, py, pz, tiltX, tiltZ) {
+      const cx = Math.cos(tiltX), sx = Math.sin(tiltX);
+      const cz = Math.cos(tiltZ), sz = Math.sin(tiltZ);
+
+      const r00 = cz,       r01 = -cx * sz, r02 = sx * sz;
+      const r10 = sz,       r11 = cx * cz,  r12 = -sx * cz;
+      const r20 = 0,        r21 = sx,       r22 = cx;
+
+      const dy0 = flY - py;
+      const tx = px - r00 * px + r01 * dy0 - r02 * pz;
+      const ty = py - r10 * px + r11 * dy0 - r12 * pz;
+      const tz = pz - r20 * px + r21 * dy0 - r22 * pz;
+
+      const m = new Float32Array(16);
+      m[0] = r00; m[1] = r10; m[2]  = r20; m[3]  = 0;
+      m[4] = r01; m[5] = r11; m[6]  = r21; m[7]  = 0;
+      m[8] = r02; m[9] = r12; m[10] = r22; m[11] = 0;
+      m[12] = tx; m[13] = ty; m[14] = tz;  m[15] = 1;
+      return m;
+    },
+    fromQuatTranslationScale(q, t, s) {
+      const [x, y, z, w] = q;
+      const x2 = x + x, y2 = y + y, z2 = z + z;
+      const xx = x * x2, xy = x * y2, xz = x * z2;
+      const yy = y * y2, yz = y * z2, zz = z * z2;
+      const wx = w * x2, wy = w * y2, wz = w * z2;
+      const m = new Float32Array(16);
+      m[0] = (1 - (yy + zz)) * s;
+      m[1] = (xy + wz) * s;
+      m[2] = (xz - wy) * s;
+      m[3] = 0;
+      m[4] = (xy - wz) * s;
+      m[5] = (1 - (xx + zz)) * s;
+      m[6] = (yz + wx) * s;
+      m[7] = 0;
+      m[8] = (xz + wy) * s;
+      m[9] = (yz - wx) * s;
+      m[10] = (1 - (xx + yy)) * s;
+      m[11] = 0;
+      m[12] = t[0];
+      m[13] = t[1];
+      m[14] = t[2];
+      m[15] = 1;
+      return m;
+    }
+  };
+
+  const Quat = {
+    identity() { return [0, 0, 0, 1]; },
+    fromAxisAngle(ax, ay, az, rad) {
+      const half = rad * 0.5;
+      const s = Math.sin(half);
+      return [ax * s, ay * s, az * s, Math.cos(half)];
+    },
+    multiply(a, b) {
+      const [ax, ay, az, aw] = a;
+      const [bx, by, bz, bw] = b;
+      return [
+        aw * bx + ax * bw + ay * bz - az * by,
+        aw * by - ax * bz + ay * bw + az * bx,
+        aw * bz + ax * by - ay * bx + az * bw,
+        aw * bw - ax * bx - ay * by - az * bz
+      ];
+    },
+    normalize(q) {
+      const l = Math.hypot(q[0], q[1], q[2], q[3]) || 1;
+      return [q[0] / l, q[1] / l, q[2] / l, q[3] / l];
+    }
+  };
+
+  /* ============================================================================
+     4. INICIALIZAÇÃO WEBGL E SHADERS PROCEDURAIS
+     ============================================================================ */
+  const canvas = document.getElementById('glCanvas');
+  const gl = canvas.getContext('webgl', { antialias: true, alpha: false, powerPreference: 'high-performance' });
+  if (!gl) {
+    document.body.innerHTML = '<div style="padding:40px;color:#fff;font-size:18px">Seu navegador não suporta WebGL.</div>';
+    return;
+  }
+
+  function compileShader(type, src) {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+      console.error('Shader error:', gl.getShaderInfoLog(sh));
+    }
+    return sh;
+  }
+
+  function createProgram(vsSrc, fsSrc) {
+    const p = gl.createProgram();
+    gl.attachShader(p, compileShader(gl.VERTEX_SHADER, vsSrc));
+    gl.attachShader(p, compileShader(gl.FRAGMENT_SHADER, fsSrc));
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+      console.error('Link error:', gl.getProgramInfoLog(p));
+    }
+    return p;
+  }
+
+  const solidVS = `
+    attribute vec3 aPos;
+    attribute vec3 aNorm;
+    attribute vec3 aColor;
+    attribute vec3 aLocal;
+
+    uniform mat4 uProj;
+    uniform mat4 uView;
+    uniform mat4 uModel;
+
+    varying vec3 vWorldPos;
+    varying vec3 vNorm;
+    varying vec3 vColor;
+    varying vec3 vLocal;
+
+    void main() {
+      vec4 wp = uModel * vec4(aPos, 1.0);
+      vWorldPos = wp.xyz;
+      vNorm = normalize(mat3(uModel) * aNorm);
+      vColor = aColor;
+      vLocal = aLocal;
+      gl_Position = uProj * uView * wp;
+    }
+  `;
+
+  const solidFS = `
+    precision mediump float;
+
+    varying vec3 vWorldPos;
+    varying vec3 vNorm;
+    varying vec3 vColor;
+    varying vec3 vLocal;
+
+    uniform vec3 uCamPos;
+    uniform vec3 uFogColor;
+    uniform float uFogStart;
+    uniform float uFogEnd;
+    uniform float uAlpha;
+    uniform float uMode;
+    uniform float uTime;
+    uniform vec3 uBallPos;
+    uniform float uCurrentFloorY;
+
+    void main() {
+      vec3 N = normalize(vNorm);
+      vec3 V = normalize(uCamPos - vWorldPos);
+      vec3 L1 = normalize(vec3(0.42, 0.85, 0.32));
+      vec3 L2 = normalize(vec3(-0.6, 0.35, -0.55));
+
+      vec3 baseCol = vColor;
+      float alpha = uAlpha;
+
+      if (uMode < 0.5) {
+        vec2 g = abs(fract(vLocal.xz / 2.6 - 0.5) - 0.5) / 0.5;
+        float edge = max(g.x, g.y);
+        float gridLine = smoothstep(0.92, 0.97, edge);
+        baseCol = mix(baseCol, baseCol * 1.65 + vec3(0.06, 0.11, 0.18), gridLine * 0.65);
+
+        float diff = max(dot(N, L1), 0.0) * 0.65 + max(dot(N, L2), 0.0) * 0.25 + 0.35;
+        baseCol *= diff;
+
+        float dy = uBallPos.y - vWorldPos.y;
+        if (dy > 0.0 && dy < 4.5 && abs(vWorldPos.y - uCurrentFloorY) < 0.85) {
+          float distXZ = length(vWorldPos.xz - uBallPos.xz);
+          float rad = 0.62 + dy * 0.12;
+          float shadow = smoothstep(rad, 0.05, distXZ) * clamp(1.0 - dy / 4.5, 0.0, 1.0);
+          baseCol *= (1.0 - shadow * 0.62);
+        }
+      } else if (uMode < 1.5) {
+        float diff1 = max(dot(N, L1), 0.0);
+        float diff2 = max(dot(N, L2), 0.0);
+        float topBoost = smoothstep(0.6, 0.95, N.y) * 0.28;
+        vec3 H = normalize(L1 + V);
+        float spec = pow(max(dot(N, H), 0.0), 28.0) * 0.25;
+        baseCol = baseCol * (0.34 + diff1 * 0.62 + diff2 * 0.24 + topBoost) + vec3(spec);
+      } else if (uMode < 2.5) {
+        vec3 ln = normalize(vLocal);
+        float eqBand = smoothstep(0.16, 0.08, abs(ln.y));
+        float mer1 = smoothstep(0.14, 0.07, abs(ln.x));
+        float mer2 = smoothstep(0.14, 0.07, abs(ln.z));
+        float stripes = max(eqBand, max(mer1, mer2) * 0.75);
+
+        vec3 coreCol = vec3(0.94, 0.97, 1.0);
+        vec3 stripeCol = vec3(0.10, 0.76, 1.0);
+        vec3 poleCol = vec3(1.0, 0.42, 0.28);
+        float pole = smoothstep(0.84, 0.92, abs(ln.y));
+
+        baseCol = mix(coreCol, stripeCol, stripes);
+        baseCol = mix(baseCol, poleCol, pole);
+
+        float diff1 = max(dot(N, L1), 0.0);
+        float diff2 = max(dot(N, L2), 0.0);
+        vec3 H = normalize(L1 + V);
+        float spec = pow(max(dot(N, H), 0.0), 48.0) * 0.75;
+        float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0) * 0.45;
+        baseCol = baseCol * (0.32 + diff1 * 0.72 + diff2 * 0.28) + vec3(spec) + vec3(0.35, 0.8, 1.0) * rim;
+      } else {
+        float pulse = 0.82 + 0.18 * sin(uTime * 4.5);
+        baseCol *= pulse;
+      }
+
+      float dist = length(uCamPos - vWorldPos);
+      float fogF = clamp((dist - uFogStart) / (uFogEnd - uFogStart), 0.0, 0.88);
+      vec3 finalCol = mix(baseCol, uFogColor, fogF);
+
+      gl_FragColor = vec4(finalCol, alpha);
+    }
+  `;
+
+  const lineVS = `
+    attribute vec3 aPos;
+    attribute vec3 aColor;
+    uniform mat4 uProj;
+    uniform mat4 uView;
+    uniform mat4 uModel;
+    varying vec3 vWorldPos;
+    varying vec3 vColor;
+    void main() {
+      vec4 wp = uModel * vec4(aPos, 1.0);
+      vWorldPos = wp.xyz;
+      vColor = aColor;
+      gl_Position = uProj * uView * wp;
+    }
+  `;
+
+  const lineFS = `
+    precision mediump float;
+    varying vec3 vWorldPos;
+    varying vec3 vColor;
+    uniform vec3 uCamPos;
+    uniform vec3 uFogColor;
+    uniform float uFogStart;
+    uniform float uFogEnd;
+    uniform float uAlpha;
+    void main() {
+      float dist = length(uCamPos - vWorldPos);
+      float fogF = clamp((dist - uFogStart) / (uFogEnd - uFogStart), 0.0, 0.85);
+      vec3 col = mix(vColor, uFogColor, fogF);
+      gl_FragColor = vec4(col, uAlpha * (1.0 - fogF * 0.45));
+    }
+  `;
+
+  const progSolid = createProgram(solidVS, solidFS);
+  const progLine = createProgram(lineVS, lineFS);
+
+  const locSolid = {
+    aPos: gl.getAttribLocation(progSolid, 'aPos'),
+    aNorm: gl.getAttribLocation(progSolid, 'aNorm'),
+    aColor: gl.getAttribLocation(progSolid, 'aColor'),
+    aLocal: gl.getAttribLocation(progSolid, 'aLocal'),
+    uProj: gl.getUniformLocation(progSolid, 'uProj'),
+    uView: gl.getUniformLocation(progSolid, 'uView'),
+    uModel: gl.getUniformLocation(progSolid, 'uModel'),
+    uCamPos: gl.getUniformLocation(progSolid, 'uCamPos'),
+    uFogColor: gl.getUniformLocation(progSolid, 'uFogColor'),
+    uFogStart: gl.getUniformLocation(progSolid, 'uFogStart'),
+    uFogEnd: gl.getUniformLocation(progSolid, 'uFogEnd'),
+    uAlpha: gl.getUniformLocation(progSolid, 'uAlpha'),
+    uMode: gl.getUniformLocation(progSolid, 'uMode'),
+    uTime: gl.getUniformLocation(progSolid, 'uTime'),
+    uBallPos: gl.getUniformLocation(progSolid, 'uBallPos'),
+    uCurrentFloorY: gl.getUniformLocation(progSolid, 'uCurrentFloorY')
+  };
+
+  const locLine = {
+    aPos: gl.getAttribLocation(progLine, 'aPos'),
+    aColor: gl.getAttribLocation(progLine, 'aColor'),
+    uProj: gl.getUniformLocation(progLine, 'uProj'),
+    uView: gl.getUniformLocation(progLine, 'uView'),
+    uModel: gl.getUniformLocation(progLine, 'uModel'),
+    uCamPos: gl.getUniformLocation(progLine, 'uCamPos'),
+    uFogColor: gl.getUniformLocation(progLine, 'uFogColor'),
+    uFogStart: gl.getUniformLocation(progLine, 'uFogStart'),
+    uFogEnd: gl.getUniformLocation(progLine, 'uFogEnd'),
+    uAlpha: gl.getUniformLocation(progLine, 'uAlpha')
+  };
+
+  /* ============================================================================
+     5. CONSTRUTORES DE GEOMETRIA 3D PROCEDURAL
+     ============================================================================ */
+  class MeshBuilder {
+    constructor() {
+      this.verts = [];
+      this.indices = [];
+      this.vCount = 0;
+    }
+
+    addBox(x0, y0, z0, x1, y1, z1, col) {
+      const r = col[0], g = col[1], b = col[2];
+      const faces = [
+        { n: [0, 1, 0], pts: [[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]] },
+        { n: [0, -1, 0], pts: [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]] },
+        { n: [0, 0, 1], pts: [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]] },
+        { n: [0, 0, -1], pts: [[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]] },
+        { n: [1, 0, 0], pts: [[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]] },
+        { n: [-1, 0, 0], pts: [[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]] }
+      ];
+
+      for (const f of faces) {
+        const base = this.vCount;
+        for (const p of f.pts) {
+          this.verts.push(p[0], p[1], p[2], f.n[0], f.n[1], f.n[2], r, g, b, p[0], p[1], p[2]);
+          this.vCount++;
+        }
+        this.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      }
+    }
+
+    buildGL() {
+      const vbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.verts), gl.STATIC_DRAW);
+
+      const ibo = gl.createBuffer();
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(this.indices), gl.STATIC_DRAW);
+
+      return { vbo, ibo, count: this.indices.length };
+    }
+  }
+
+  class LineBuilder {
+    constructor() {
+      this.verts = [];
+      this.count = 0;
+    }
+    addSegment(x0, y0, z0, x1, y1, z1, col) {
+      this.verts.push(x0, y0, z0, col[0], col[1], col[2], x1, y1, z1, col[0], col[1], col[2]);
+      this.count += 2;
+    }
+    addRectXZ(x0, z0, x1, z1, y, col) {
+      this.addSegment(x0, y, z0, x1, y, z0, col);
+      this.addSegment(x1, y, z0, x1, y, z1, col);
+      this.addSegment(x1, y, z1, x0, y, z1, col);
+      this.addSegment(x0, y, z1, x0, y, z0, col);
+    }
+    buildGL() {
+      const vbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.verts), gl.STATIC_DRAW);
+      return { vbo, count: this.count };
+    }
+  }
+
+  function createSphereMesh(latBands = 22, lonBands = 28) {
+    const verts = [];
+    const indices = [];
+    for (let lat = 0; lat <= latBands; lat++) {
+      const theta = (lat * Math.PI) / latBands;
+      const sinT = Math.sin(theta);
+      const cosT = Math.cos(theta);
+      for (let lon = 0; lon <= lonBands; lon++) {
+        const phi = (lon * 2 * Math.PI) / lonBands;
+        const x = Math.cos(phi) * sinT;
+        const y = cosT;
+        const z = Math.sin(phi) * sinT;
+        verts.push(x, y, z, x, y, z, 1, 1, 1, x, y, z);
+      }
+    }
+    for (let lat = 0; lat < latBands; lat++) {
+      for (let lon = 0; lon < lonBands; lon++) {
+        const first = lat * (lonBands + 1) + lon;
+        const second = first + lonBands + 1;
+        indices.push(first, second, first + 1, second, second + 1, first + 1);
+      }
+    }
+    const vbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.STATIC_DRAW);
+    const ibo = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+    return { vbo, ibo, count: indices.length };
+  }
+
+  function createRingMesh(segs = 32, rInner = 0.72, rOuter = 1.0) {
+    const verts = [];
+    const indices = [];
+    for (let i = 0; i <= segs; i++) {
+      const a = (i / segs) * Math.PI * 2;
+      const ca = Math.cos(a), sa = Math.sin(a);
+      verts.push(ca * rInner, 0, sa * rInner, 0, 1, 0, 0.5, 0.92, 1.0, 0, 0, 0);
+      verts.push(ca * rOuter, 0, sa * rOuter, 0, 1, 0, 0.5, 0.92, 1.0, 0, 0, 0);
+    }
+    for (let i = 0; i < segs; i++) {
+      const b = i * 2;
+      indices.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
+    }
+    const vbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.STATIC_DRAW);
+    const ibo = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+    return { vbo, ibo, count: indices.length };
+  }
+
+  const sphereMesh = createSphereMesh();
+  const ringMesh = createRingMesh();
+
+  /* ============================================================================
+     6. GERADOR PROCEDURAL DE LABIRINTOS E GERENCIAMENTO INFINITO DE ANDARES
+     ============================================================================ */
+  function getGridSizeForFloor(floorIdx) {
+    if (floorIdx <= 1) return 5;
+    if (floorIdx <= 4) return 7;
+    if (floorIdx <= 8) return 9;
+    if (floorIdx <= 13) return 11;
+    return 13;
+  }
+
+  function cellToWorld(c, r, size) {
+    const half = (size - 1) * 0.5;
+    return [(c - half) * CELL_SIZE, (r - half) * CELL_SIZE];
+  }
+
+  function worldToCell(wx, wz, size) {
+    const half = (size - 1) * 0.5;
+    const c = Math.round(wx / CELL_SIZE + half);
+    const r = Math.round(wz / CELL_SIZE + half);
+    return [Math.max(0, Math.min(size - 1, c)), Math.max(0, Math.min(size - 1, r))];
+  }
+
+  const SESSION_SEED = (Math.random() * 1e9) | 0;
+  function makeRNG(seed) {
+    let s = (seed ^ SESSION_SEED) >>> 0;
+    return () => {
+      s = (s + 0x6D2B79F5) >>> 0;
+      let t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  const floors = new Map();
+
+  function generateFloor(floorIdx, startWorldX, startWorldZ) {
+    const size = getGridSizeForFloor(floorIdx);
+    const y = -floorIdx * FLOOR_GAP;
+    const rand = makeRNG(floorIdx * 7919 + 104729);
+    const palette = PALETTES[floorIdx % PALETTES.length];
+
+    const [startC, startR] = worldToCell(startWorldX, startWorldZ, size);
+
+    const cells = [];
+    for (let r = 0; r < size; r++) {
+      cells[r] = [];
+      for (let c = 0; c < size; c++) {
+        cells[r][c] = { visited: false, N: true, E: true, S: true, W: true };
+      }
+    }
+
+    const active = [[startC, startR]];
+    cells[startR][startC].visited = true;
+    const branchRatio = (floorIdx % 3 === 0) ? 0.35 : (floorIdx % 3 === 1 ? 0.12 : 0.22);
+
+    const dirs = [
+      { dc: 0, dr: -1, w: 'N', opp: 'S' },
+      { dc: 1, dr: 0,  w: 'E', opp: 'W' },
+      { dc: 0, dr: 1,  w: 'S', opp: 'N' },
+      { dc: -1, dr: 0, w: 'W', opp: 'E' }
+    ];
+
+    while (active.length > 0) {
+      const idx = rand() < branchRatio ? Math.floor(rand() * active.length) : active.length - 1;
+      const [cc, cr] = active[idx];
+
+      const neighbors = [];
+      for (const d of dirs) {
+        const nc = cc + d.dc, nr = cr + d.dr;
+        if (nc >= 0 && nc < size && nr >= 0 && nr < size && !cells[nr][nc].visited) {
+          neighbors.push({ nc, nr, d });
+        }
+      }
+
+      if (neighbors.length > 0) {
+        const pick = neighbors[Math.floor(rand() * neighbors.length)];
+        cells[cr][cc][pick.d.w] = false;
+        cells[pick.nr][pick.nc][pick.d.opp] = false;
+        cells[pick.nr][pick.nc].visited = true;
+        active.push([pick.nc, pick.nr]);
+      } else {
+        active.splice(idx, 1);
+      }
+    }
+
+    const distMap = Array.from({ length: size }, () => Array(size).fill(-1));
+    const q = [[startC, startR]];
+    distMap[startR][startC] = 0;
+    let maxDist = 0;
+
+    while (q.length > 0) {
+      const [cc, cr] = q.shift();
+      const cd = distMap[cr][cc];
+      if (cd > maxDist) maxDist = cd;
+      for (const d of dirs) {
+        if (!cells[cr][cc][d.w]) {
+          const nc = cc + d.dc, nr = cr + d.dr;
+          if (distMap[nr][nc] === -1) {
+            distMap[nr][nc] = cd + 1;
+            q.push([nc, nr]);
+          }
+        }
+      }
+    }
+
+    const candidates = [];
+    const minTargetDist = Math.max(2, Math.floor(maxDist * 0.78));
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        if (distMap[r][c] >= minTargetDist && !(c === startC && r === startR)) {
+          candidates.push([c, r]);
+        }
+      }
+    }
+    const [exitC, exitR] = candidates.length > 0
+      ? candidates[Math.floor(rand() * candidates.length)]
+      : [size - 1 - startC, size - 1 - startR];
+
+    if (floorIdx >= 2) {
+      const braidChance = Math.min(0.16, 0.05 + floorIdx * 0.01);
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          if ((c === exitC && r === exitR) || (c === startC && r === startR)) continue;
+          const closed = dirs.filter(d => {
+            const nc = c + d.dc, nr = r + d.dr;
+            return nc >= 0 && nc < size && nr >= 0 && nr < size && cells[r][c][d.w];
+          });
+          if (closed.length >= 3 && rand() < braidChance) {
+            const pick = closed[Math.floor(rand() * closed.length)];
+            cells[r][c][pick.w] = false;
+            cells[r + pick.dr][c + pick.dc][pick.opp] = false;
+          }
+        }
+      }
+    }
+
+    const [exitX, exitZ] = cellToWorld(exitC, exitR, size);
+    const [startX, startZ] = cellToWorld(startC, startR, size);
+
+    const floorBuilder = new MeshBuilder();
+    const wallBuilder = new MeshBuilder();
+    const portalBuilder = new MeshBuilder();
+    const wireBuilder = new LineBuilder();
+    const colliders = [];
+
+    const halfBoard = (size * CELL_SIZE) * 0.5;
+    const halfT = WALL_T * 0.5;
+
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        const [cx, cz] = cellToWorld(c, r, size);
+        const x0 = cx - CELL_SIZE * 0.5;
+        const x1 = cx + CELL_SIZE * 0.5;
+        const z0 = cz - CELL_SIZE * 0.5;
+        const z1 = cz + CELL_SIZE * 0.5;
+
+        if (c === exitC && r === exitR) {
+          const hx0 = cx - HOLE_HALF, hx1 = cx + HOLE_HALF;
+          const hz0 = cz - HOLE_HALF, hz1 = cz + HOLE_HALF;
+          floorBuilder.addBox(x0, -FLOOR_THICKNESS, z0, x1, 0, hz0, palette.floor);
+          floorBuilder.addBox(x0, -FLOOR_THICKNESS, hz1, x1, 0, z1, palette.floor);
+          floorBuilder.addBox(x0, -FLOOR_THICKNESS, hz0, hx0, 0, hz1, palette.floor);
+          floorBuilder.addBox(hx1, -FLOOR_THICKNESS, hz0, x1, 0, hz1, palette.floor);
+
+          const rimW = 0.14, rimH = 0.07;
+          portalBuilder.addBox(hx0 - rimW, -0.02, hz0 - rimW, hx1 + rimW, rimH, hz0, palette.accent);
+          portalBuilder.addBox(hx0 - rimW, -0.02, hz1, hx1 + rimW, rimH, hz1 + rimW, palette.accent);
+          portalBuilder.addBox(hx0 - rimW, -0.02, hz0, hx0, rimH, hz1, palette.accent);
+          portalBuilder.addBox(hx1, -0.02, hz0, hx1 + rimW, rimH, hz1, palette.accent);
+
+          const shaftCol = palette.accent;
+          const sOff = HOLE_HALF * 0.85;
+          wireBuilder.addSegment(cx - sOff, 0.1, cz - sOff, cx - sOff, -FLOOR_GAP + 0.2, cz - sOff, shaftCol);
+          wireBuilder.addSegment(cx + sOff, 0.1, cz - sOff, cx + sOff, -FLOOR_GAP + 0.2, cz - sOff, shaftCol);
+          wireBuilder.addSegment(cx + sOff, 0.1, cz + sOff, cx + sOff, -FLOOR_GAP + 0.2, cz + sOff, shaftCol);
+          wireBuilder.addSegment(cx - sOff, 0.1, cz + sOff, cx - sOff, -FLOOR_GAP + 0.2, cz + sOff, shaftCol);
+          wireBuilder.addRectXZ(cx - sOff, cz - sOff, cx + sOff, cz + sOff, -FLOOR_GAP * 0.35, shaftCol);
+          wireBuilder.addRectXZ(cx - sOff, cz - sOff, cx + sOff, cz + sOff, -FLOOR_GAP * 0.70, shaftCol);
+        } else {
+          const isStart = (c === startC && r === startR);
+          const tileCol = isStart
+            ? [palette.floor[0] * 1.45, palette.floor[1] * 1.45, palette.floor[2] * 1.45]
+            : palette.floor;
+          floorBuilder.addBox(x0, -FLOOR_THICKNESS, z0, x1, 0, z1, tileCol);
+        }
+      }
+    }
+
+    function addWallBox(minX, minZ, maxX, maxZ) {
+      wallBuilder.addBox(minX, 0, minZ, maxX, WALL_H, maxZ, palette.wall);
+      colliders.push({ minX, maxX, minZ, maxZ });
+      wireBuilder.addRectXZ(minX, minZ, maxX, maxZ, WALL_H + 0.015, palette.wire);
+    }
+
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        const [cx, cz] = cellToWorld(c, r, size);
+        const x0 = cx - CELL_SIZE * 0.5;
+        const x1 = cx + CELL_SIZE * 0.5;
+        const z0 = cz - CELL_SIZE * 0.5;
+        const z1 = cz + CELL_SIZE * 0.5;
+
+        if (cells[r][c].N) addWallBox(x0 - halfT, z0 - halfT, x1 + halfT, z0 + halfT);
+        if (cells[r][c].W) addWallBox(x0 - halfT, z0 - halfT, x0 + halfT, z1 + halfT);
+        if (r === size - 1 && cells[r][c].S) addWallBox(x0 - halfT, z1 - halfT, x1 + halfT, z1 + halfT);
+        if (c === size - 1 && cells[r][c].E) addWallBox(x1 - halfT, z0 - halfT, x1 + halfT, z1 + halfT);
+      }
+    }
+
+    const outer = halfBoard + halfT + 0.16;
+    wireBuilder.addRectXZ(-outer, -outer, outer, outer, 0.02, palette.wire);
+    wireBuilder.addRectXZ(-outer, -outer, outer, outer, -FLOOR_THICKNESS, palette.wire);
+
+    const pillarCol = [palette.wire[0] * 0.55, palette.wire[1] * 0.55, palette.wire[2] * 0.55];
+    wireBuilder.addSegment(-outer, 0, -outer, -outer, -FLOOR_GAP, -outer, pillarCol);
+    wireBuilder.addSegment( outer, 0, -outer,  outer, -FLOOR_GAP, -outer, pillarCol);
+    wireBuilder.addSegment( outer, 0,  outer,  outer, -FLOOR_GAP,  outer, pillarCol);
+    wireBuilder.addSegment(-outer, 0,  outer, -outer, -FLOOR_GAP,  outer, pillarCol);
+
+    return {
+      index: floorIdx,
+      size,
+      y,
+      palette,
+      startX, startZ,
+      exitX, exitZ,
+      maxDistWorld: Math.hypot(exitX - startX, exitZ - startZ) || 1,
+      colliders,
+      floorMesh: floorBuilder.buildGL(),
+      wallMesh: wallBuilder.buildGL(),
+      portalMesh: portalBuilder.buildGL(),
+      wireMesh: wireBuilder.buildGL()
+    };
+  }
+
+  function disposeFloor(floor) {
+    if (!floor) return;
+    gl.deleteBuffer(floor.floorMesh.vbo);
+    gl.deleteBuffer(floor.floorMesh.ibo);
+    gl.deleteBuffer(floor.wallMesh.vbo);
+    gl.deleteBuffer(floor.wallMesh.ibo);
+    gl.deleteBuffer(floor.portalMesh.vbo);
+    gl.deleteBuffer(floor.portalMesh.ibo);
+    gl.deleteBuffer(floor.wireMesh.vbo);
+  }
+
+  function ensureFloorsAround(currentIdx) {
+    for (let i = 0; i <= currentIdx + VISIBLE_BELOW; i++) {
+      if (i < currentIdx - VISIBLE_ABOVE) continue;
+      if (!floors.has(i)) {
+        let sx = 0, sz = 0;
+        if (i > 0 && floors.has(i - 1)) {
+          const prev = floors.get(i - 1);
+          sx = prev.exitX;
+          sz = prev.exitZ;
+        }
+        floors.set(i, generateFloor(i, sx, sz));
+      }
+    }
+
+    for (const [idx, fl] of floors.entries()) {
+      if (idx < currentIdx - VISIBLE_ABOVE) {
+        disposeFloor(fl);
+        floors.delete(idx);
+      }
+    }
+  }
+
+  /* ============================================================================
+     7. ESTADO DO JOGO, BOLA, INCLINAÇÃO DO PLAYFIELD E CÂMERA (TOP-DOWN)
+     ============================================================================ */
+  let currentFloorIdx = 0;
+  let floorsCleared = 0;
+  ensureFloorsAround(0);
+
+  const firstFloor = floors.get(0);
+  const ball = {
+    x: firstFloor.startX,
+    y: firstFloor.y + BALL_R,
+    z: firstFloor.startZ,
+    vx: 0,
+    vy: 0,
+    vz: 0,
+    quat: Quat.identity(),
+    grounded: true,
+    fallingThrough: false
+  };
+
+  const playfieldTilt = {
+    x: 0,
+    z: 0,
+    targetX: 0,
+    targetZ: 0
+  };
+
+  const shockwave = { active: false, x: 0, y: 0, z: 0, t: 0 };
+
+  const cam = {
+    yaw: DEFAULT_YAW,
+    targetYaw: DEFAULT_YAW,
+    pitch: DEFAULT_PITCH,
+    targetPitch: DEFAULT_PITCH,
+    dist: DEFAULT_DIST,
+    targetDist: DEFAULT_DIST,
+    lookX: ball.x,
+    lookY: ball.y - 2.2,
+    lookZ: ball.z,
+    shake: 0
+  };
+
+  function resetCameraTopDown() {
+    const fl = floors.get(currentFloorIdx);
+    const sizeBonus = fl ? (fl.size - 5) * 1.15 : 0;
+    cam.targetYaw = DEFAULT_YAW;
+    cam.targetPitch = DEFAULT_PITCH;
+    cam.targetDist = DEFAULT_DIST + sizeBonus;
+  }
+
+  /* ============================================================================
+     8. CONTROLES (TECLADO, MOUSE, TOUCH MOBILE E SENSORES ANDROID/iOS)
+     ============================================================================ */
+  const keys = Object.create(null);
+  const touchInput = { x: 0, y: 0, brake: false };
+  const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+  const accelInput = {
+    x: 0,
+    y: 0,
+    available: false,
+    source: null, // 'orientation' | 'generic' | 'motion'
+    errorReason: null,
+    listenersAttached: false,
+    genericSensor: null,
+    orientationEvents: 0,
+    baseBeta: null,
+    baseGamma: null,
+    rawBeta: 0,
+    rawGamma: 0,
+    baseAx: null,
+    baseAy: null,
+    rawAx: 0,
+    rawAy: 0,
+    rawAz: 9.8
+  };
+
+  const btnCalibrate = document.getElementById('btnCalibrate');
+  const accelStatusText = document.getElementById('accelStatusText');
+
+  function updateAccelStatusUI(msg) {
+    if (!accelStatusText) return;
+    accelStatusText.classList.remove('warn');
+
+    if (msg) {
+      accelStatusText.textContent = msg;
+      return;
+    }
+    if (!Settings.accelerometer) {
+      accelStatusText.textContent = 'Desativado nas configurações';
+    } else if (accelInput.available) {
+      const labels = {
+        orientation: 'Giroscópio / Orientação',
+        generic: 'Acelerômetro Android (Generic Sensor)',
+        motion: 'Acelerômetro (DeviceMotion)'
+      };
+      const srcLabel = labels[accelInput.source] || 'Ativo';
+      const px = Math.round(accelInput.x * 100);
+      const py = Math.round(accelInput.y * 100);
+      accelStatusText.textContent = `Ativo (${srcLabel}) • Inclinação: ${px}%, ${py}%`;
+    } else if (window.isSecureContext === false) {
+      accelStatusText.classList.add('warn');
+      accelStatusText.textContent = 'Bloqueado: abra a página via HTTPS ou localhost';
+    } else if (accelInput.errorReason) {
+      accelStatusText.classList.add('warn');
+      accelStatusText.textContent = accelInput.errorReason;
+    } else if (!isTouchDevice) {
+      accelStatusText.textContent = 'Disponível apenas em celulares e tablets';
+    } else {
+      accelStatusText.textContent = 'Aguardando leitura do sensor...';
+    }
+  }
+
+  function applyScreenOrientationMapping(rawX, rawY) {
+    const angle = (window.screen && window.screen.orientation && typeof window.screen.orientation.angle === 'number')
+      ? window.screen.orientation.angle
+      : (typeof window.orientation === 'number' ? window.orientation : 0);
+
+    if (angle === 90) {
+      return [-rawY, rawX];
+    } else if (angle === -90 || angle === 270) {
+      return [rawY, -rawX];
+    } else if (angle === 180) {
+      return [-rawX, -rawY];
+    }
+    return [rawX, rawY];
+  }
+
+  function normalizeVectorTilt(rawX, rawY, dead, maxVal) {
+    const normX = Math.abs(rawX) < dead ? 0 : Math.max(-1, Math.min(1, (rawX - Math.sign(rawX) * dead) / (maxVal - dead)));
+    const normY = Math.abs(rawY) < dead ? 0 : Math.max(-1, Math.min(1, (rawY - Math.sign(rawY) * dead) / (maxVal - dead)));
+    accelInput.x = normX;
+    accelInput.y = normY;
+    if (gameState === 'SETTINGS') updateAccelStatusUI();
+  }
+
+  // Fonte 1: DeviceOrientation (Giroscópio / Fusão de sensores)
+  function handleDeviceOrientation(e) {
+    if (typeof e.beta !== 'number' || typeof e.gamma !== 'number' || Number.isNaN(e.beta) || Number.isNaN(e.gamma)) {
+      return;
+    }
+    accelInput.orientationEvents++;
+    // Ignora primeiro disparo zerado emitido por alguns modelos Android sem giroscópio
+    if (accelInput.orientationEvents === 1 && e.beta === 0 && e.gamma === 0) {
+      return;
+    }
+
+    accelInput.available = true;
+    accelInput.source = 'orientation';
+    accelInput.errorReason = null;
+    accelInput.rawBeta = e.beta;
+    accelInput.rawGamma = e.gamma;
+
+    if (accelInput.baseBeta === null) {
+      accelInput.baseBeta = e.beta;
+      accelInput.baseGamma = e.gamma;
+    }
+
+    if (!Settings.accelerometer) {
+      accelInput.x = 0;
+      accelInput.y = 0;
+      return;
+    }
+
+    let dBeta = e.beta - accelInput.baseBeta;
+    let dGamma = e.gamma - accelInput.baseGamma;
+    if (dBeta > 180) dBeta -= 360;
+    if (dBeta < -180) dBeta += 360;
+
+    const [tiltX, tiltY] = applyScreenOrientationMapping(dGamma, -dBeta);
+    normalizeVectorTilt(tiltX, tiltY, 2.0, 18.0);
+  }
+
+  // Fonte 2: Generic Sensor API (GravitySensor / Accelerometer — nativo Android 13 Chrome & Brave)
+  function startGenericSensor() {
+    if (accelInput.genericSensor) return;
+    const SensorClass = window.GravitySensor || window.Accelerometer;
+    if (!SensorClass) return;
+
+    try {
+      const sensor = new SensorClass({ frequency: 60 });
+      sensor.addEventListener('reading', () => {
+        if (accelInput.source === 'orientation') return;
+        if (typeof sensor.x !== 'number' || typeof sensor.y !== 'number') return;
+
+        accelInput.available = true;
+        accelInput.source = 'generic';
+        accelInput.errorReason = null;
+        accelInput.rawAx = sensor.x;
+        accelInput.rawAy = sensor.y;
+        accelInput.rawAz = typeof sensor.z === 'number' ? sensor.z : 9.8;
+
+        if (accelInput.baseAx === null) {
+          accelInput.baseAx = sensor.x;
+          accelInput.baseAy = sensor.y;
+        }
+
+        if (!Settings.accelerometer) {
+          accelInput.x = 0;
+          accelInput.y = 0;
+          return;
+        }
+
+        // No padrão W3C (Android), inclinar para direita aumenta +X; inclinar topo para baixo aumenta +Y
+        const dAx = sensor.x - accelInput.baseAx;
+        const dAy = sensor.y - accelInput.baseAy;
+        const [tiltX, tiltY] = applyScreenOrientationMapping(dAx, dAy);
+        normalizeVectorTilt(tiltX, tiltY, 0.30, 3.1);
+      });
+
+      sensor.addEventListener('error', (ev) => {
+        const errName = ev && ev.error ? ev.error.name : '';
+        if (errName === 'NotAllowedError' || errName === 'SecurityError') {
+          accelInput.errorReason = 'Bloqueado pelo navegador/iframe (ative Sensores de Movimento)';
+        } else if (errName === 'NotReadableError') {
+          accelInput.errorReason = 'Sensor físico indisponível neste aparelho';
+        }
+        if (gameState === 'SETTINGS') updateAccelStatusUI();
+      });
+
+      sensor.start();
+      accelInput.genericSensor = sensor;
+    } catch (err) {
+      if (err && (err.name === 'SecurityError' || err.name === 'NotAllowedError')) {
+        accelInput.errorReason = 'Bloqueado pela política de segurança do navegador';
+      }
+    }
+  }
+
+  // Fonte 3: DeviceMotion fallback (acelerômetro legado)
+  function handleDeviceMotion(e) {
+    if (accelInput.source === 'orientation' || accelInput.source === 'generic') return;
+    const ag = e.accelerationIncludingGravity;
+    if (!ag || typeof ag.x !== 'number' || typeof ag.y !== 'number') return;
+
+    accelInput.available = true;
+    accelInput.source = 'motion';
+    accelInput.errorReason = null;
+    accelInput.rawAx = ag.x;
+    accelInput.rawAy = ag.y;
+    accelInput.rawAz = typeof ag.z === 'number' ? ag.z : 9.8;
+
+    if (accelInput.baseAx === null) {
+      accelInput.baseAx = ag.x;
+      accelInput.baseAy = ag.y;
+    }
+
+    if (!Settings.accelerometer) {
+      accelInput.x = 0;
+      accelInput.y = 0;
+      return;
+    }
+
+    // Android usa +Z para cima (+1), iOS usa -Z (-1)
+    const sign = accelInput.rawAz < -1.0 ? -1 : 1;
+    const dAx = (ag.x - accelInput.baseAx) * sign;
+    const dAy = (ag.y - accelInput.baseAy) * sign;
+
+    const [tiltX, tiltY] = applyScreenOrientationMapping(dAx, dAy);
+    normalizeVectorTilt(tiltX, tiltY, 0.30, 3.1);
+  }
+
+  function resetAccelerometerCalibration() {
+    accelInput.baseBeta = accelInput.available ? accelInput.rawBeta : null;
+    accelInput.baseGamma = accelInput.available ? accelInput.rawGamma : null;
+    accelInput.baseAx = accelInput.available ? accelInput.rawAx : null;
+    accelInput.baseAy = accelInput.available ? accelInput.rawAy : null;
+    accelInput.x = 0;
+    accelInput.y = 0;
+  }
+
+  function calibrateAccelerometer() {
+    resetAccelerometerCalibration();
+    triggerVibration(18);
+    showCustomToast('ACELERÔMETRO CALIBRADO');
+  }
+
+  function attachSensorListeners() {
+    if (!accelInput.listenersAttached) {
+      accelInput.listenersAttached = true;
+      window.addEventListener('deviceorientation', handleDeviceOrientation, true);
+      window.addEventListener('devicemotion', handleDeviceMotion, true);
+    }
+    startGenericSensor();
+  }
+
+  function checkSensorPermissionState() {
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'accelerometer' }).then((status) => {
+        if (status.state === 'denied') {
+          accelInput.errorReason = 'Permissão negada no Chrome/Brave (Sensores de Movimento)';
+          if (gameState === 'SETTINGS') updateAccelStatusUI();
+        }
+        status.onchange = () => {
+          if (status.state === 'granted') {
+            accelInput.errorReason = null;
+            attachSensorListeners();
+          } else if (status.state === 'denied') {
+            accelInput.errorReason = 'Permissão negada no Chrome/Brave (Sensores de Movimento)';
+          }
+          if (gameState === 'SETTINGS') updateAccelStatusUI();
+        };
+      }).catch(() => {});
+    }
+  }
+
+  function enableAccelerometer(fromUserGesture = false) {
+    if (!Settings.accelerometer) return;
+    resetAccelerometerCalibration();
+
+    // iOS 13+ exige requestPermission no gesto do usuário
+    const reqOrient = (fromUserGesture && typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function')
+      ? DeviceOrientationEvent.requestPermission()
+      : null;
+    const reqMotion = (fromUserGesture && typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function')
+      ? DeviceMotionEvent.requestPermission()
+      : null;
+
+    if (reqOrient || reqMotion) {
+      Promise.allSettled([reqOrient, reqMotion].filter(Boolean)).then((results) => {
+        const granted = results.some(r => r.status === 'fulfilled' && r.value === 'granted');
+        if (granted) {
+          attachSensorListeners();
+          updateAccelStatusUI('Permissão concedida! Incline o aparelho.');
+        } else {
+          accelInput.errorReason = 'Permissão negada pelo navegador.';
+          updateAccelStatusUI();
+        }
+      });
+    } else {
+      attachSensorListeners();
+      checkSensorPermissionState();
+      updateAccelStatusUI();
+    }
+  }
+
+  // Inicia os sensores imediatamente ao abrir a página (Android não exige gesto)
+  enableAccelerometer(false);
+
+  btnCalibrate.addEventListener('click', calibrateAccelerometer);
+
+  window.addEventListener('keydown', (e) => {
+    Sound.init();
+    if (e.code === 'Escape') {
+      if (gameState === 'PLAYING') openSettings('PLAYING');
+      else if (gameState === 'SETTINGS') closeSettings();
+      return;
+    }
+    if (gameState !== 'PLAYING') return;
+
+    keys[e.code] = true;
+    if (e.code === 'KeyR') {
+      resetCameraTopDown();
+    }
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  window.addEventListener('keyup', (e) => {
+    keys[e.code] = false;
+  });
+
+  // Mouse para orbitar câmera livremente + zoom
+  let dragging = false;
+  let lastMouseX = 0, lastMouseY = 0;
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (gameState !== 'PLAYING') return;
+    Sound.init();
+    dragging = true;
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging || gameState !== 'PLAYING') return;
+    const dx = e.clientX - lastMouseX;
+    const dy = e.clientY - lastMouseY;
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+    cam.targetYaw -= dx * 0.0065;
+    cam.targetPitch = Math.max(0.35, Math.min(1.52, cam.targetPitch + dy * 0.0055));
+  });
+
+  window.addEventListener('mouseup', () => { dragging = false; });
+
+  canvas.addEventListener('wheel', (e) => {
+    if (gameState !== 'PLAYING') return;
+    e.preventDefault();
+    cam.targetDist = Math.max(12, Math.min(34, cam.targetDist + e.deltaY * 0.012));
+  }, { passive: false });
+
+  // Controles Touch (Mobile)
+  const touchControlsEl = document.getElementById('touchControls');
+  const joyZone = document.getElementById('joystickZone');
+  const joyKnob = document.getElementById('joystickKnob');
+  const brakeBtn = document.getElementById('brakeBtn');
+
+  let joyTouchId = null;
+  let camTouchId = null;
+  let lastTouchX = 0, lastTouchY = 0;
+
+  joyZone.addEventListener('touchstart', (e) => {
+    if (gameState !== 'PLAYING') return;
+    Sound.init();
+    e.preventDefault();
+    if (joyTouchId !== null) return;
+    const t = e.changedTouches[0];
+    joyTouchId = t.identifier;
+    updateJoystick(t);
+  }, { passive: false });
+
+  window.addEventListener('touchmove', (e) => {
+    if (gameState !== 'PLAYING') return;
+    for (const t of e.changedTouches) {
+      if (t.identifier === joyTouchId) {
+        e.preventDefault();
+        updateJoystick(t);
+      } else if (t.identifier === camTouchId) {
+        e.preventDefault();
+        const dx = t.clientX - lastTouchX;
+        const dy = t.clientY - lastTouchY;
+        lastTouchX = t.clientX;
+        lastTouchY = t.clientY;
+        cam.targetYaw -= dx * 0.007;
+        cam.targetPitch = Math.max(0.35, Math.min(1.52, cam.targetPitch + dy * 0.006));
+      }
+    }
+  }, { passive: false });
+
+  window.addEventListener('touchend', (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === joyTouchId) {
+        joyTouchId = null;
+        touchInput.x = 0;
+        touchInput.y = 0;
+        joyKnob.style.transform = 'translate(0px, 0px)';
+      } else if (t.identifier === camTouchId) {
+        camTouchId = null;
+      }
+    }
+  });
+
+  canvas.addEventListener('touchstart', (e) => {
+    if (gameState !== 'PLAYING') return;
+    Sound.init();
+    if (camTouchId === null && e.changedTouches.length > 0) {
+      const t = e.changedTouches[0];
+      camTouchId = t.identifier;
+      lastTouchX = t.clientX;
+      lastTouchY = t.clientY;
+    }
+  }, { passive: true });
+
+  function updateJoystick(touch) {
+    const rect = joyZone.getBoundingClientRect();
+    const cx = rect.left + rect.width * 0.5;
+    const cy = rect.top + rect.height * 0.5;
+    const maxR = rect.width * 0.38;
+    let dx = touch.clientX - cx;
+    let dy = touch.clientY - cy;
+    const dist = Math.hypot(dx, dy);
+    if (dist > maxR) {
+      dx = (dx / dist) * maxR;
+      dy = (dy / dist) * maxR;
+    }
+    joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+    touchInput.x = dx / maxR;
+    touchInput.y = -dy / maxR;
+  }
+
+  brakeBtn.addEventListener('touchstart', (e) => {
+    if (gameState !== 'PLAYING') return;
+    e.preventDefault();
+    touchInput.brake = true;
+    brakeBtn.classList.add('pressed');
+  }, { passive: false });
+
+  brakeBtn.addEventListener('touchend', () => {
+    touchInput.brake = false;
+    brakeBtn.classList.remove('pressed');
+  });
+
+  /* ============================================================================
+     9. GERENCIAMENTO DE TELAS (INÍCIO, CONFIGURAÇÕES E TELA CHEIA)
+     ============================================================================ */
+  const hudLayer = document.getElementById('hudLayer');
+  const startScreen = document.getElementById('startScreen');
+  const settingsScreen = document.getElementById('settingsScreen');
+
+  const optVolume = document.getElementById('optVolume');
+  const optVolumeVal = document.getElementById('optVolumeVal');
+  const optSound = document.getElementById('optSound');
+  const optVibrate = document.getElementById('optVibrate');
+  const optTilt = document.getElementById('optTilt');
+  const optAccel = document.getElementById('optAccel');
+  const optFullscreen = document.getElementById('optFullscreen');
+  const btnFullscreenHud = document.getElementById('btnFullscreenHud');
+
+  function syncSettingsUI() {
+    optVolume.value = Math.round(Settings.volume * 100);
+    optVolumeVal.textContent = `${Math.round(Settings.volume * 100)}%`;
+
+    optSound.textContent = Settings.sound ? 'Ligado' : 'Desligado';
+    optSound.classList.toggle('active', Settings.sound);
+
+    optVibrate.textContent = Settings.vibration ? 'Ligada' : 'Desligada';
+    optVibrate.classList.toggle('active', Settings.vibration);
+
+    optTilt.textContent = Settings.boardTilt ? 'Ligada' : 'Desligada';
+    optTilt.classList.toggle('active', Settings.boardTilt);
+
+    optAccel.textContent = Settings.accelerometer ? 'Ligado' : 'Desligado';
+    optAccel.classList.toggle('active', Settings.accelerometer);
+
+    btnCalibrate.style.display = (isTouchDevice && Settings.accelerometer) ? 'inline-block' : 'none';
+    updateAccelStatusUI();
+
+    const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    optFullscreen.textContent = isFs ? 'Ativada' : 'Ativar';
+    optFullscreen.classList.toggle('active', isFs);
+    btnFullscreenHud.textContent = isFs ? 'Sair Tela Cheia' : 'Tela Cheia';
+  }
+
+  async function toggleFullscreen() {
+    try {
+      const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      if (!isFs) {
+        const el = document.documentElement;
+        if (el.requestFullscreen) await el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+      } else {
+        if (document.exitFullscreen) await document.exitFullscreen();
+        else if (document.webkitExitFullscreen) await document.webkitExitFullscreen();
+      }
+    } catch (_) {
+      showCustomToast('TELA CHEIA INDISPONÍVEL NESTE NAVEGADOR');
+    }
+    syncSettingsUI();
+  }
+
+  document.addEventListener('fullscreenchange', syncSettingsUI);
+  document.addEventListener('webkitfullscreenchange', syncSettingsUI);
+
+  function startGame() {
+    enableAccelerometer(true);
+    Sound.init();
+    gameState = 'PLAYING';
+    startScreen.classList.add('hidden');
+    settingsScreen.classList.add('hidden');
+    hudLayer.classList.remove('hidden');
+    if (isTouchDevice) touchControlsEl.classList.add('active');
+    syncSettingsUI();
+  }
+
+  function openSettings(fromState) {
+    Sound.init();
+    previousState = fromState;
+    gameState = 'SETTINGS';
+    startScreen.classList.add('hidden');
+    hudLayer.classList.add('hidden');
+    touchControlsEl.classList.remove('active');
+    settingsScreen.classList.remove('hidden');
+    syncSettingsUI();
+  }
+
+  function closeSettings() {
+    settingsScreen.classList.add('hidden');
+    if (previousState === 'PLAYING') {
+      gameState = 'PLAYING';
+      hudLayer.classList.remove('hidden');
+      if (isTouchDevice) touchControlsEl.classList.add('active');
+    } else {
+      gameState = 'START';
+      startScreen.classList.remove('hidden');
+    }
+  }
+
+  document.getElementById('btnStartGame').addEventListener('click', startGame);
+  document.getElementById('btnOpenSettingsStart').addEventListener('click', () => openSettings('START'));
+  document.getElementById('btnSettingsHud').addEventListener('click', () => openSettings('PLAYING'));
+  document.getElementById('btnCloseSettings').addEventListener('click', closeSettings);
+  btnFullscreenHud.addEventListener('click', toggleFullscreen);
+  optFullscreen.addEventListener('click', toggleFullscreen);
+
+  optVolume.addEventListener('input', (e) => {
+    Settings.volume = Number(e.target.value) / 100;
+    syncSettingsUI();
+  });
+
+  optSound.addEventListener('click', () => {
+    Sound.init();
+    Settings.sound = !Settings.sound;
+    syncSettingsUI();
+  });
+
+  optVibrate.addEventListener('click', () => {
+    Settings.vibration = !Settings.vibration;
+    if (Settings.vibration) triggerVibration(25);
+    syncSettingsUI();
+  });
+
+  optTilt.addEventListener('click', () => {
+    Settings.boardTilt = !Settings.boardTilt;
+    syncSettingsUI();
+  });
+
+  optAccel.addEventListener('click', () => {
+    Settings.accelerometer = !Settings.accelerometer;
+    if (Settings.accelerometer) {
+      enableAccelerometer(true);
+    } else {
+      accelInput.x = 0;
+      accelInput.y = 0;
+    }
+    syncSettingsUI();
+  });
+
+  document.getElementById('btnCam').addEventListener('click', resetCameraTopDown);
+
+  // HUD Elementos
+  const uiFloor = document.getElementById('uiFloor');
+  const uiCleared = document.getElementById('uiCleared');
+  const uiGrid = document.getElementById('uiGrid');
+  const uiProx = document.getElementById('uiProx');
+  const uiProxBar = document.getElementById('uiProxBar');
+  const floorToast = document.getElementById('floorToast');
+  let toastTimer = null;
+
+  function showCustomToast(text) {
+    floorToast.textContent = text;
+    floorToast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => floorToast.classList.remove('show'), 1400);
+  }
+
+  function showFloorToast(num) {
+    showCustomToast(`ANDAR ${String(num).padStart(2, '0')}`);
+  }
+
+  function updateHUD() {
+    const fl = floors.get(currentFloorIdx);
+    uiFloor.textContent = String(currentFloorIdx + 1).padStart(2, '0');
+    uiCleared.textContent = String(floorsCleared);
+    uiGrid.textContent = `${fl.size}×${fl.size}`;
+
+    const d = Math.hypot(ball.x - fl.exitX, ball.z - fl.exitZ);
+    const pct = Math.max(0, Math.min(100, Math.round((1 - d / (fl.maxDistWorld * 1.05)) * 100)));
+    uiProx.textContent = `${pct}%`;
+    uiProxBar.style.width = `${pct}%`;
+  }
+
+  /* ============================================================================
+     10. SIMULAÇÃO FÍSICA (FIXED TIMESTEP 120Hz)
+     ============================================================================ */
+  function stepPhysics(dt) {
+    const floor = floors.get(currentFloorIdx);
+    if (!floor) return;
+
+    if (keys['KeyQ']) cam.targetYaw += 1.9 * dt;
+    if (keys['KeyE']) cam.targetYaw -= 1.9 * dt;
+
+    if (ball.fallingThrough) {
+      ball.vx = 0;
+      ball.vz = 0;
+      const alignRate = 1 - Math.exp(-16 * dt);
+      ball.x += (floor.exitX - ball.x) * alignRate;
+      ball.z += (floor.exitZ - ball.z) * alignRate;
+
+      playfieldTilt.targetX = 0;
+      playfieldTilt.targetZ = 0;
+    } else {
+      let inForward = touchInput.y + (Settings.accelerometer ? accelInput.y : 0);
+      let inRight = touchInput.x + (Settings.accelerometer ? accelInput.x : 0);
+      if (keys['KeyW'] || keys['ArrowUp']) inForward += 1;
+      if (keys['KeyS'] || keys['ArrowDown']) inForward -= 1;
+      if (keys['KeyD'] || keys['ArrowRight']) inRight += 1;
+      if (keys['KeyA'] || keys['ArrowLeft']) inRight -= 1;
+
+      const inLen = Math.hypot(inForward, inRight);
+      if (inLen > 1) {
+        inForward /= inLen;
+        inRight /= inLen;
+      }
+
+      const fwdX = -Math.sin(cam.yaw);
+      const fwdZ = -Math.cos(cam.yaw);
+      const rightX = Math.cos(cam.yaw);
+      const rightZ = -Math.sin(cam.yaw);
+
+      const wishX = fwdX * inForward + rightX * inRight;
+      const wishZ = fwdZ * inForward + rightZ * inRight;
+
+      const accel = ball.grounded ? MOVE_ACCEL : AIR_ACCEL;
+      ball.vx += wishX * accel * dt;
+      ball.vz += wishZ * accel * dt;
+
+      const braking = keys['Space'] || touchInput.brake;
+      const drag = ball.grounded ? (braking ? BRAKE_DRAG : GROUND_DRAG) : 0.45;
+      const damp = Math.exp(-drag * dt);
+      ball.vx *= damp;
+      ball.vz *= damp;
+
+      const hSpeed = Math.hypot(ball.vx, ball.vz);
+      if (hSpeed > MAX_SPEED) {
+        const s = MAX_SPEED / hSpeed;
+        ball.vx *= s;
+        ball.vz *= s;
+      }
+
+      if (Settings.boardTilt && !braking) {
+        const velFactorX = (ball.vx / MAX_SPEED) * 0.84 + wishX * 0.16;
+        const velFactorZ = (ball.vz / MAX_SPEED) * 0.84 + wishZ * 0.16;
+        const mag = Math.hypot(velFactorX, velFactorZ);
+        const norm = mag > 1 ? 1 / mag : 1;
+        playfieldTilt.targetX = (velFactorZ * norm) * MAX_PLAYFIELD_TILT;
+        playfieldTilt.targetZ = -(velFactorX * norm) * MAX_PLAYFIELD_TILT;
+      } else {
+        playfieldTilt.targetX = 0;
+        playfieldTilt.targetZ = 0;
+      }
+    }
+
+    ball.vy += GRAVITY * dt;
+
+    const dxExit = ball.x - floor.exitX;
+    const dzExit = ball.z - floor.exitZ;
+    const inExitSquare = Math.abs(dxExit) < (HOLE_HALF - 0.14) && Math.abs(dzExit) < (HOLE_HALF - 0.14);
+    const nearExitRim = Math.abs(dxExit) < HOLE_HALF && Math.abs(dzExit) < HOLE_HALF;
+
+    if (!ball.fallingThrough && ball.grounded && nearExitRim && !inExitSquare) {
+      ball.vx -= dxExit * 9.5 * dt;
+      ball.vz -= dzExit * 9.5 * dt;
+    }
+
+    const prevX = ball.x;
+    const prevZ = ball.z;
+
+    ball.x += ball.vx * dt;
+    ball.y += ball.vy * dt;
+    ball.z += ball.vz * dt;
+
+    const floorTop = floor.y + BALL_R;
+    if (!ball.fallingThrough) {
+      if (inExitSquare && ball.y <= floorTop + 0.05) {
+        ball.fallingThrough = true;
+        ball.grounded = false;
+        ball.vx = 0;
+        ball.vz = 0;
+        Sound.playDrop();
+      } else if (ball.y <= floorTop) {
+        if (ball.vy < -2.6) {
+          Sound.playLand(-ball.vy);
+          ball.vy = -ball.vy * FLOOR_BOUNCE;
+        } else {
+          ball.vy = 0;
+        }
+        ball.y = floorTop;
+        ball.grounded = true;
+      } else {
+        ball.grounded = false;
+      }
+    } else {
+      const nextFloor = floors.get(currentFloorIdx + 1);
+      if (nextFloor && ball.y <= nextFloor.y + BALL_R) {
+        const impactSpeed = -ball.vy;
+        ball.x = floor.exitX;
+        ball.z = floor.exitZ;
+        ball.vx = 0;
+        ball.vz = 0;
+        ball.y = nextFloor.y + BALL_R;
+        ball.vy = impactSpeed > 3.0 ? impactSpeed * FLOOR_BOUNCE : 0;
+        ball.grounded = true;
+        ball.fallingThrough = false;
+
+        currentFloorIdx++;
+        floorsCleared++;
+        ensureFloorsAround(currentFloorIdx);
+
+        Sound.playLand(impactSpeed);
+        cam.shake = Math.min(0.45, impactSpeed * 0.018);
+        shockwave.active = true;
+        shockwave.x = ball.x;
+        shockwave.y = nextFloor.y + 0.04;
+        shockwave.z = ball.z;
+        shockwave.t = 0;
+
+        const nextSize = floors.get(currentFloorIdx).size;
+        cam.targetDist = Math.max(cam.targetDist, DEFAULT_DIST + (nextSize - 5) * 1.15);
+        showFloorToast(currentFloorIdx + 1);
+      }
+    }
+
+    const activeFloor = floors.get(currentFloorIdx);
+    if (!ball.fallingThrough && activeFloor && ball.y > activeFloor.y - 0.1 && ball.y < activeFloor.y + WALL_H + BALL_R) {
+      for (let iter = 0; iter < 2; iter++) {
+        for (const box of activeFloor.colliders) {
+          const cx = Math.max(box.minX, Math.min(ball.x, box.maxX));
+          const cz = Math.max(box.minZ, Math.min(ball.z, box.maxZ));
+          const dx = ball.x - cx;
+          const dz = ball.z - cz;
+          const d2 = dx * dx + dz * dz;
+          if (d2 < BALL_R * BALL_R && d2 > 1e-10) {
+            const d = Math.sqrt(d2);
+            const nx = dx / d;
+            const nz = dz / d;
+            const pen = BALL_R - d;
+            ball.x += nx * pen;
+            ball.z += nz * pen;
+
+            const vn = ball.vx * nx + ball.vz * nz;
+            if (vn < 0) {
+              if (iter === 0 && -vn > 1.8) Sound.playBump((-vn) / MAX_SPEED);
+              ball.vx -= (1 + WALL_BOUNCE) * vn * nx;
+              ball.vz -= (1 + WALL_BOUNCE) * vn * nz;
+            }
+          }
+        }
+      }
+    }
+
+    const moveX = ball.x - prevX;
+    const moveZ = ball.z - prevZ;
+    const moveDist = Math.hypot(moveX, moveZ);
+    if (moveDist > 1e-6) {
+      const axisX = moveZ / moveDist;
+      const axisZ = -moveX / moveDist;
+      const angle = moveDist / BALL_R;
+      const dq = Quat.fromAxisAngle(axisX, 0, axisZ, angle);
+      ball.quat = Quat.normalize(Quat.multiply(dq, ball.quat));
+    }
+
+    if (shockwave.active) {
+      shockwave.t += dt * 2.4;
+      if (shockwave.t >= 1) shockwave.active = false;
+    }
+  }
+
+  /* ============================================================================
+     11. RENDERIZAÇÃO WEBGL
+     ============================================================================ */
+  const FOG_COLOR = [0.024, 0.036, 0.078];
+  const STRIDE_SOLID = 12 * 4;
+  const STRIDE_LINE = 6 * 4;
+
+  function resizeCanvas() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.floor(window.innerWidth * dpr);
+    const h = Math.floor(window.innerHeight * dpr);
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+      gl.viewport(0, 0, w, h);
+    }
+  }
+
+  function bindSolidMesh(mesh) {
+    gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vbo);
+    gl.enableVertexAttribArray(locSolid.aPos);
+    gl.vertexAttribPointer(locSolid.aPos, 3, gl.FLOAT, false, STRIDE_SOLID, 0);
+    gl.enableVertexAttribArray(locSolid.aNorm);
+    gl.vertexAttribPointer(locSolid.aNorm, 3, gl.FLOAT, false, STRIDE_SOLID, 12);
+    gl.enableVertexAttribArray(locSolid.aColor);
+    gl.vertexAttribPointer(locSolid.aColor, 3, gl.FLOAT, false, STRIDE_SOLID, 24);
+    gl.enableVertexAttribArray(locSolid.aLocal);
+    gl.vertexAttribPointer(locSolid.aLocal, 3, gl.FLOAT, false, STRIDE_SOLID, 36);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ibo);
+  }
+
+  function drawLineMesh(mesh, modelMat, alpha, proj, view, camPos) {
+    gl.useProgram(progLine);
+    gl.uniformMatrix4fv(locLine.uProj, false, proj);
+    gl.uniformMatrix4fv(locLine.uView, false, view);
+    gl.uniformMatrix4fv(locLine.uModel, false, modelMat);
+    gl.uniform3fv(locLine.uCamPos, camPos);
+    gl.uniform3fv(locLine.uFogColor, FOG_COLOR);
+    gl.uniform1f(locLine.uFogStart, 22.0);
+    gl.uniform1f(locLine.uFogEnd, 92.0);
+    gl.uniform1f(locLine.uAlpha, alpha);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vbo);
+    gl.enableVertexAttribArray(locLine.aPos);
+    gl.vertexAttribPointer(locLine.aPos, 3, gl.FLOAT, false, STRIDE_LINE, 0);
+    gl.enableVertexAttribArray(locLine.aColor);
+    gl.vertexAttribPointer(locLine.aColor, 3, gl.FLOAT, false, STRIDE_LINE, 12);
+    gl.drawArrays(gl.LINES, 0, mesh.count);
+  }
+
+  function render(timeSec, dt) {
+    resizeCanvas();
+
+    if (gameState === 'START') {
+      cam.targetYaw = Math.sin(timeSec * 0.25) * 0.35;
+      cam.targetPitch = 1.38;
+      playfieldTilt.targetX = Math.cos(timeSec * 0.5) * 0.025;
+      playfieldTilt.targetZ = Math.sin(timeSec * 0.5) * 0.025;
+    }
+
+    const tiltSmooth = 1 - Math.exp(-9.0 * dt);
+    playfieldTilt.x += (playfieldTilt.targetX - playfieldTilt.x) * tiltSmooth;
+    playfieldTilt.z += (playfieldTilt.targetZ - playfieldTilt.z) * tiltSmooth;
+
+    const smooth = 1 - Math.exp(-8.0 * dt);
+    cam.yaw += (cam.targetYaw - cam.yaw) * (1 - Math.exp(-10 * dt));
+    cam.pitch += (cam.targetPitch - cam.pitch) * (1 - Math.exp(-10 * dt));
+    cam.dist += (cam.targetDist - cam.dist) * (1 - Math.exp(-6 * dt));
+
+    cam.lookX += (ball.x - cam.lookX) * smooth;
+    cam.lookZ += (ball.z - cam.lookZ) * smooth;
+    const desiredLookY = ball.y - 2.2;
+    cam.lookY += (desiredLookY - cam.lookY) * (1 - Math.exp(-6.5 * dt));
+
+    if (cam.shake > 0.001) cam.shake *= Math.exp(-12 * dt);
+    else cam.shake = 0;
+
+    const shakeY = (Math.random() - 0.5) * cam.shake;
+    const horizDist = Math.cos(cam.pitch) * cam.dist;
+    const eyeX = cam.lookX + Math.sin(cam.yaw) * horizDist;
+    const eyeY = cam.lookY + Math.sin(cam.pitch) * cam.dist + shakeY;
+    const eyeZ = cam.lookZ + Math.cos(cam.yaw) * horizDist;
+    const camPos = [eyeX, eyeY, eyeZ];
+
+    const aspect = canvas.width / canvas.height;
+    const proj = Mat4.perspective(0.76, aspect, 0.3, 180.0);
+    const view = Mat4.lookAt(camPos, [cam.lookX, cam.lookY, cam.lookZ], [0, 1, 0]);
+
+    gl.clearColor(FOG_COLOR[0], FOG_COLOR[1], FOG_COLOR[2], 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LEQUAL);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    const curFloor = floors.get(currentFloorIdx);
+    const curFloorY = curFloor ? curFloor.y : 0;
+
+    const pivotX = ball.x;
+    const pivotY = curFloorY;
+    const pivotZ = ball.z;
+
+    const cx = Math.cos(playfieldTilt.x), sx = Math.sin(playfieldTilt.x);
+    const cz = Math.cos(playfieldTilt.z), sz = Math.sin(playfieldTilt.z);
+    const surfNx = -cx * sz;
+    const surfNy = cx * cz;
+    const surfNz = sx;
+
+    const renderBallX = ball.x + surfNx * BALL_R;
+    const renderBallY = (ball.y - BALL_R) + surfNy * BALL_R;
+    const renderBallZ = ball.z + surfNz * BALL_R;
+
+    const sortedFloors = Array.from(floors.values()).sort((a, b) => b.index - a.index);
+
+    for (const fl of sortedFloors) {
+      const rel = fl.index - currentFloorIdx;
+      const model = Mat4.fromTiltedFloor(fl.y, pivotX, pivotY, pivotZ, playfieldTilt.x, playfieldTilt.z);
+
+      let floorAlpha = 0.84;
+      let wallAlpha = 0.96;
+      let wireAlpha = 0.72;
+
+      if (rel < 0) {
+        const heightDiff = Math.max(0, fl.y - ball.y);
+        const fade = Math.max(0, 1 - heightDiff / 7.5);
+        floorAlpha = 0.14 * fade;
+        wallAlpha = 0.20 * fade;
+        wireAlpha = 0.25 * fade;
+        if (fade <= 0.01) continue;
+      } else if (rel > 0) {
+        floorAlpha = Math.max(0.42, 0.76 - rel * 0.07);
+        wallAlpha = Math.max(0.52, 0.88 - rel * 0.06);
+        wireAlpha = Math.max(0.32, 0.75 - rel * 0.07);
+      }
+
+      gl.useProgram(progSolid);
+      gl.uniformMatrix4fv(locSolid.uProj, false, proj);
+      gl.uniformMatrix4fv(locSolid.uView, false, view);
+      gl.uniformMatrix4fv(locSolid.uModel, false, model);
+      gl.uniform3fv(locSolid.uCamPos, camPos);
+      gl.uniform3fv(locSolid.uFogColor, FOG_COLOR);
+      gl.uniform1f(locSolid.uFogStart, 22.0);
+      gl.uniform1f(locSolid.uFogEnd, 92.0);
+      gl.uniform1f(locSolid.uTime, timeSec);
+      gl.uniform3f(locSolid.uBallPos, renderBallX, renderBallY, renderBallZ);
+      gl.uniform1f(locSolid.uCurrentFloorY, curFloorY);
+
+      gl.uniform1f(locSolid.uMode, 0.0);
+      gl.uniform1f(locSolid.uAlpha, floorAlpha);
+      bindSolidMesh(fl.floorMesh);
+      gl.drawElements(gl.TRIANGLES, fl.floorMesh.count, gl.UNSIGNED_SHORT, 0);
+
+      gl.uniform1f(locSolid.uMode, 1.0);
+      gl.uniform1f(locSolid.uAlpha, wallAlpha);
+      bindSolidMesh(fl.wallMesh);
+      gl.drawElements(gl.TRIANGLES, fl.wallMesh.count, gl.UNSIGNED_SHORT, 0);
+
+      gl.uniform1f(locSolid.uMode, 3.0);
+      gl.uniform1f(locSolid.uAlpha, Math.min(1.0, wallAlpha + 0.1));
+      bindSolidMesh(fl.portalMesh);
+      gl.drawElements(gl.TRIANGLES, fl.portalMesh.count, gl.UNSIGNED_SHORT, 0);
+
+      drawLineMesh(fl.wireMesh, model, wireAlpha, proj, view, camPos);
+    }
+
+    if (shockwave.active) {
+      gl.useProgram(progSolid);
+      const scale = 0.6 + shockwave.t * 2.4;
+      const ringModel = Mat4.fromQuatTranslationScale(Quat.identity(), [shockwave.x, shockwave.y, shockwave.z], scale);
+      gl.uniformMatrix4fv(locSolid.uModel, false, ringModel);
+      gl.uniform1f(locSolid.uMode, 3.0);
+      gl.uniform1f(locSolid.uAlpha, (1 - shockwave.t) * 0.75);
+      bindSolidMesh(ringMesh);
+      gl.drawElements(gl.TRIANGLES, ringMesh.count, gl.UNSIGNED_SHORT, 0);
+    }
+
+    gl.useProgram(progSolid);
+    const ballModel = Mat4.fromQuatTranslationScale(ball.quat, [renderBallX, renderBallY, renderBallZ], BALL_R);
+    gl.uniformMatrix4fv(locSolid.uProj, false, proj);
+    gl.uniformMatrix4fv(locSolid.uView, false, view);
+    gl.uniformMatrix4fv(locSolid.uModel, false, ballModel);
+    gl.uniform3fv(locSolid.uCamPos, camPos);
+    gl.uniform3fv(locSolid.uFogColor, FOG_COLOR);
+    gl.uniform1f(locSolid.uFogStart, 22.0);
+    gl.uniform1f(locSolid.uFogEnd, 92.0);
+    gl.uniform1f(locSolid.uMode, 2.0);
+    gl.uniform1f(locSolid.uAlpha, 1.0);
+    bindSolidMesh(sphereMesh);
+    gl.drawElements(gl.TRIANGLES, sphereMesh.count, gl.UNSIGNED_SHORT, 0);
+  }
+
+  /* ============================================================================
+     12. LOOP PRINCIPAL
+     ============================================================================ */
+  syncSettingsUI();
+  let lastTime = performance.now();
+  let accumulator = 0;
+
+  function loop(now) {
+    const rawDt = Math.min(0.05, (now - lastTime) / 1000);
+    lastTime = now;
+
+    if (gameState === 'PLAYING') {
+      accumulator += rawDt;
+      while (accumulator >= FIXED_DT) {
+        stepPhysics(FIXED_DT);
+        accumulator -= FIXED_DT;
+      }
+      updateHUD();
+    } else {
+      accumulator = 0;
+    }
+
+    render(now * 0.001, rawDt);
+    requestAnimationFrame(loop);
+  }
+
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
